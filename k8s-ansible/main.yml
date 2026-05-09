@@ -1,0 +1,100 @@
+---
+# ════════════════════════════════════════════════════════════════
+# Kubernetes Cluster + ArgoCD Deployment
+# Rocky Linux | kubeadm | Calico CNI | ArgoCD
+# ════════════════════════════════════════════════════════════════
+# Topology:
+#   master    (192.168.1.89) → Control Plane + Ansible Controller
+#   worker-01 (192.168.1.90) → Worker Node
+#   worker-02 (192.168.1.2 ) → Worker Node
+# ════════════════════════════════════════════════════════════════
+
+# ────────────────────────────────────────────────────────────────
+# Phase 1: Common prerequisites on ALL nodes
+# ────────────────────────────────────────────────────────────────
+- name: Configure all cluster nodes
+  hosts: k8s_cluster
+  become: yes
+  gather_facts: yes
+  roles:
+    - common
+  tags:
+    - common
+    - prereqs
+
+# ────────────────────────────────────────────────────────────────
+# Phase 2: Initialize control plane
+# ────────────────────────────────────────────────────────────────
+- name: Initialize Kubernetes control plane
+  hosts: control_plane
+  become: yes
+  gather_facts: yes
+  roles:
+    - master
+  tags:
+    - master
+    - control-plane
+
+# ────────────────────────────────────────────────────────────────
+# Phase 3: Join worker nodes
+# ────────────────────────────────────────────────────────────────
+- name: Join worker nodes to the cluster
+  hosts: workers
+  become: yes
+  gather_facts: yes
+  roles:
+    - worker
+  tags:
+    - workers
+    - join
+
+# ────────────────────────────────────────────────────────────────
+# Phase 4: Install ArgoCD
+# ────────────────────────────────────────────────────────────────
+- name: Install ArgoCD on control plane
+  hosts: control_plane
+  become: yes
+  gather_facts: yes
+  roles:
+    - argocd
+  tags:
+    - argocd
+
+# ────────────────────────────────────────────────────────────────
+# Phase 5: Verify cluster health
+# ────────────────────────────────────────────────────────────────
+- name: Verify cluster is healthy
+  hosts: control_plane
+  become: yes
+  gather_facts: no
+  tags:
+    - verify
+  tasks:
+    - name: Wait for all nodes to be Ready
+      command: >
+        kubectl wait --for=condition=ready node
+        --all --timeout=180s
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      retries: 6
+      delay: 10
+
+    - name: Get node status
+      command: kubectl get nodes -o wide
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: nodes_output
+
+    - name: Display nodes
+      debug:
+        var: nodes_output.stdout_lines
+
+    - name: Get all pods
+      command: kubectl get pods --all-namespaces -o wide
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: pods_output
+
+    - name: Display pods
+      debug:
+        var: pods_output.stdout_lines

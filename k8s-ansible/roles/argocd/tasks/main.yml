@@ -1,0 +1,130 @@
+---
+# ════════════════════════════════════════════════════════════════
+# 1. Create ArgoCD namespace
+# ════════════════════════════════════════════════════════════════
+- name: Create argocd namespace
+  command: kubectl create namespace argocd
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ns_result
+  failed_when: ns_result.rc != 0 and 'already exists' not in ns_result.stderr
+  changed_when: ns_result.rc == 0
+
+# ════════════════════════════════════════════════════════════════
+# 2. Install ArgoCD
+# ════════════════════════════════════════════════════════════════
+- name: Download ArgoCD install manifest
+  get_url:
+    url: "https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml"
+    dest: /tmp/argocd-install.yaml
+    mode: '0644'
+
+- name: Apply ArgoCD manifest
+  command: kubectl apply -n argocd -f /tmp/argocd-install.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# ════════════════════════════════════════════════════════════════
+# 3. Wait for ArgoCD to be ready
+# ════════════════════════════════════════════════════════════════
+- name: Wait for ArgoCD server to be ready
+  command: >
+    kubectl rollout status deployment/argocd-server
+    -n argocd --timeout=300s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 5
+  delay: 20
+  register: argocd_rollout
+  until: argocd_rollout.rc == 0
+
+# ════════════════════════════════════════════════════════════════
+# 4. Expose ArgoCD via NodePort
+# ════════════════════════════════════════════════════════════════
+- name: Check current argocd-server service type
+  command: >
+    kubectl get svc argocd-server -n argocd
+    -o jsonpath='{.spec.type}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_svc_type
+  changed_when: false
+
+- name: Patch argocd-server to NodePort
+  command: >
+    kubectl patch svc argocd-server -n argocd
+    -p '{"spec":{"type":"NodePort","ports":[
+      {"port":80,"targetPort":8080,"nodePort":{{ argocd_http_nodeport }},"protocol":"TCP","name":"http"},
+      {"port":443,"targetPort":8080,"nodePort":{{ argocd_https_nodeport }},"protocol":"TCP","name":"https"}
+    ]}}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: argocd_svc_type.stdout != 'NodePort'
+
+# ════════════════════════════════════════════════════════════════
+# 5. Open ArgoCD ports in firewalld
+# ════════════════════════════════════════════════════════════════
+- name: Open ArgoCD HTTP NodePort in firewalld
+  firewalld:
+    port: "{{ argocd_http_nodeport }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Open ArgoCD HTTPS NodePort in firewalld
+  firewalld:
+    port: "{{ argocd_https_nodeport }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+# ════════════════════════════════════════════════════════════════
+# 6. Get initial admin password
+# ════════════════════════════════════════════════════════════════
+- name: Wait for admin secret to be created
+  command: >
+    kubectl get secret argocd-initial-admin-secret -n argocd
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: secret_check
+  retries: 10
+  delay: 15
+  until: secret_check.rc == 0
+
+- name: Get ArgoCD initial admin password
+  command: >
+    kubectl get secret argocd-initial-admin-secret
+    -n argocd -o jsonpath="{.data.password}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_password_b64
+
+- name: Decode ArgoCD password
+  set_fact:
+    argocd_password: "{{ argocd_password_b64.stdout | b64decode }}"
+
+# ════════════════════════════════════════════════════════════════
+# 7. Install ArgoCD CLI
+# ════════════════════════════════════════════════════════════════
+- name: Download ArgoCD CLI
+  get_url:
+    url: "https://github.com/argoproj/argo-cd/releases/download/{{ argocd_version }}/argocd-linux-amd64"
+    dest: /usr/local/bin/argocd
+    mode: '0755'
+
+# ════════════════════════════════════════════════════════════════
+# 8. Print access info
+# ════════════════════════════════════════════════════════════════
+- name: Display ArgoCD access information
+  debug:
+    msg:
+      - "============================================="
+      - "✅ ArgoCD installed successfully!"
+      - "============================================="
+      - "🌐 URL      : https://{{ control_plane_ip }}:{{ argocd_https_nodeport }}"
+      - "👤 Username : admin"
+      - "🔑 Password : {{ argocd_password }}"
+      - "============================================="
+      - "💡 CLI Login:"
+      - "   argocd login {{ control_plane_ip }}:{{ argocd_https_nodeport }} --username admin --password '{{ argocd_password }}' --insecure"
+      - "============================================="

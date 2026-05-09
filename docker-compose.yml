@@ -1,0 +1,54 @@
+services:
+  backend:
+    build: ./MERN_PROJECT_BACKEND
+    container_name: backend_container
+    environment:
+      - DB_HOST=mongo_db
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=27017
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+    ports:
+      - "5005:5000"
+    depends_on:
+      - mongo_db
+    networks:
+      - project_network
+    volumes:
+      - ./MERN_PROJECT_BACKEND/uploads:/app/uploads
+
+
+  frontend:
+    build: ./MERN_PROJECT_FRONTEND
+    container_name: frontend_container
+    ports:
+      - "7070:80"
+    environment:
+      - REACT_APP_SERVER_URL=http://172.20.10.6:5005
+    depends_on:
+      - backend
+    networks:
+      - project_network
+
+  mongo_db:
+    image: mongo:4.4
+    container_name: mongodb_container
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=abdelrhman
+      - MONGO_INITDB_ROOT_PASSWORD=123456
+    ports:
+      - "27017:27017"
+    volumes:
+      - mydata:/data/db
+    networks:
+      - project_network
+
+volumes:
+  mydata:
+
+networks:
+  project_network:
+    driver: bridge

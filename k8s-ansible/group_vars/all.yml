@@ -1,0 +1,27 @@
+---
+# Kubernetes version to install
+kubernetes_version: "1.29"
+
+# Pod network CIDR (used by Calico)
+pod_network_cidr: "192.168.0.0/16"
+
+service_cidr: "10.96.0.0/12"
+
+# Calico version
+calico_version: "v3.27.0"
+
+# Container runtime
+containerd_version: "1.7.*"
+
+# DNS name or IP of the control plane (used by workers to join)
+# Change this to your actual control plane IP
+control_plane_ip: "10.178.240.63"
+control_plane_endpoint: "10.178.240.63:6443"
+
+# Kubernetes API server advertise address
+apiserver_advertise_address: "10.178.240.63"
+
+# ArgoCD
+argocd_version: "v2.10.0"
+argocd_http_nodeport: 30080
+argocd_https_nodeport: 30443

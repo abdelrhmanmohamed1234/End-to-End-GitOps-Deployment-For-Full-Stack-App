@@ -1,0 +1,163 @@
+---
+# ════════════════════════════════════════════════════════════════
+# 1. Initialize the control plane
+# ════════════════════════════════════════════════════════════════
+- name: Check if Kubernetes is already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_init_check
+
+- name: Initialize Kubernetes control plane with kubeadm
+  command: >
+    kubeadm init
+    --apiserver-advertise-address={{ apiserver_advertise_address }}
+    --control-plane-endpoint={{ control_plane_endpoint }}
+    --pod-network-cidr={{ pod_network_cidr }}
+  when: not kubeadm_init_check.stat.exists
+  register: kubeadm_init_output
+
+- name: Print kubeadm init output
+  debug:
+    var: kubeadm_init_output.stdout_lines
+  when: kubeadm_init_output is defined and kubeadm_init_output.changed
+
+# ════════════════════════════════════════════════════════════════
+# 2. Configure kubectl for root user
+# ════════════════════════════════════════════════════════════════
+- name: Create .kube directory for root
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0700'
+
+- name: Copy admin.conf to root .kube/config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0600'
+
+# ════════════════════════════════════════════════════════════════
+# 3. Configure kubectl for ansible user
+# ════════════════════════════════════════════════════════════════
+- name: Create .kube directory for ansible user
+  file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0700'
+
+- name: Copy admin.conf to ansible user .kube/config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: yes
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'
+
+# ════════════════════════════════════════════════════════════════
+# 4. FIX 5 — Wait for API Server before applying Calico
+# ════════════════════════════════════════════════════════════════
+- name: Wait for API Server to be ready
+  command: kubectl cluster-info
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: api_check
+  retries: 15
+  delay: 10
+  until: api_check.rc == 0
+
+# ════════════════════════════════════════════════════════════════
+# 5. Install Calico CNI
+# ════════════════════════════════════════════════════════════════
+- name: Check if Calico is already installed
+  command: kubectl get daemonset calico-node -n kube-system
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Download Calico manifest
+  get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/calico.yaml"
+    dest: /tmp/calico.yaml
+    mode: '0644'
+  when: calico_check.rc != 0
+
+- name: Apply Calico CNI manifest
+  command: kubectl apply -f /tmp/calico.yaml --validate=false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: calico_check.rc != 0
+
+- name: Wait for Calico pods to be running
+  command: >
+    kubectl wait --for=condition=ready pod
+    -l k8s-app=calico-node
+    -n kube-system
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_wait
+  retries: 5
+  delay: 15
+  until: calico_wait.rc == 0
+
+# ════════════════════════════════════════════════════════════════
+# 6. Generate join command for worker nodes
+# ════════════════════════════════════════════════════════════════
+- name: Generate kubeadm join command
+  command: kubeadm token create --print-join-command
+  register: join_command_raw
+
+- name: Save join command to controller
+  local_action:
+    module: copy
+    content: "{{ join_command_raw.stdout }}"
+    dest: /tmp/k8s_join_command.sh
+    mode: '0600'
+
+# ════════════════════════════════════════════════════════════════
+# 7. kubectl autocomplete and alias
+# FIX 6 — DNF not APT
+# ════════════════════════════════════════════════════════════════
+- name: Install bash-completion
+  dnf:
+    name: bash-completion
+    state: present
+
+- name: Add kubectl bash completion
+  lineinfile:
+    path: "/home/{{ ansible_user }}/.bashrc"
+    line: 'source <(kubectl completion bash)'
+    state: present
+
+- name: Add kubectl alias k
+  lineinfile:
+    path: "/home/{{ ansible_user }}/.bashrc"
+    line: "alias k='kubectl'"
+    state: present
+
+- name: Add alias completion
+  lineinfile:
+    path: "/home/{{ ansible_user }}/.bashrc"
+    line: "complete -o default -F __start_kubectl k"
+    state: present
+
+# ════════════════════════════════════════════════════════════════
+# 8. Print cluster info
+# ════════════════════════════════════════════════════════════════
+- name: Get cluster info
+  command: kubectl cluster-info
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cluster_info
+
+- name: Display cluster info
+  debug:
+    var: cluster_info.stdout_lines

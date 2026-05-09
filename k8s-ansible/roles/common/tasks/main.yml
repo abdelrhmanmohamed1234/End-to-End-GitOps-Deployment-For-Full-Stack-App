@@ -1,0 +1,303 @@
+---
+# ════════════════════════════════════════════════════════════════
+# FIX 1 — Remove K3s if installed (MUST BE FIRST)
+# ════════════════════════════════════════════════════════════════
+- name: Check if K3s server is installed
+  stat:
+    path: /usr/local/bin/k3s-uninstall.sh
+  register: k3s_server
+
+- name: Uninstall K3s server
+  command: /usr/local/bin/k3s-uninstall.sh
+  when: k3s_server.stat.exists
+
+- name: Check if K3s agent is installed
+  stat:
+    path: /usr/local/bin/k3s-agent-uninstall.sh
+  register: k3s_agent
+
+- name: Uninstall K3s agent
+  command: /usr/local/bin/k3s-agent-uninstall.sh
+  when: k3s_agent.stat.exists
+
+- name: Verify critical ports are free after K3s removal
+  shell: ss -tlnp | grep -E '6443|10250|10257|10259' || true
+  register: ports_check
+
+- name: Fail if ports are still in use
+  fail:
+    msg: "Ports still in use: {{ ports_check.stdout }} — please free them manually"
+  when: ports_check.stdout != ""
+
+# ════════════════════════════════════════════════════════════════
+# 2. Disable swap
+# ════════════════════════════════════════════════════════════════
+- name: Disable swap immediately
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Remove swap from /etc/fstab permanently
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s+swap\s+.*)$'
+    replace: '# \1'
+
+# ════════════════════════════════════════════════════════════════
+# 3. Set hostname
+# ════════════════════════════════════════════════════════════════
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+# ════════════════════════════════════════════════════════════════
+# FIX 2 — /etc/hosts dynamic from inventory (no hardcoded IPs)
+# ════════════════════════════════════════════════════════════════
+- name: Update /etc/hosts dynamically from inventory
+  blockinfile:
+    path: /etc/hosts
+    block: |
+      {% for host in groups['k8s_cluster'] %}
+      {{ hostvars[host]['ansible_host'] }} {{ host }}
+      {% endfor %}
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - K8S NODES"
+
+# ════════════════════════════════════════════════════════════════
+# 4. Disable SELinux
+# ════════════════════════════════════════════════════════════════
+- name: Set SELinux to permissive mode (runtime)
+  command: setenforce 0
+  ignore_errors: yes
+
+- name: Set SELinux to permissive mode (permanent)
+  replace:
+    path: /etc/selinux/config
+    regexp: '^SELINUX=enforcing'
+    replace: 'SELINUX=permissive'
+
+# ════════════════════════════════════════════════════════════════
+# FIX 3 — Firewalld: ports + CIDRs + masquerade
+# ════════════════════════════════════════════════════════════════
+- name: Ensure firewalld is started and enabled
+  systemd:
+    name: firewalld
+    state: started
+    enabled: yes
+
+- name: Open required ports on control plane
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  loop:
+    - 6443/tcp
+    - 2379/tcp
+    - 2380/tcp
+    - 10250/tcp
+    - 10257/tcp
+    - 10259/tcp
+    - 179/tcp
+    - 4789/udp
+  when: inventory_hostname in groups['control_plane']
+
+- name: Open required ports on worker nodes
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  loop:
+    - 10250/tcp
+    - 179/tcp
+    - 4789/udp
+  when: inventory_hostname in groups['workers']
+
+- name: Open NodePort range on workers
+  command: firewall-cmd --permanent --add-port=30000-32767/tcp
+  when: inventory_hostname in groups['workers']
+  notify: Reload firewalld
+
+- name: Allow Kubernetes Service CIDR traffic
+  firewalld:
+    rich_rule: "rule family=ipv4 destination address={{ service_cidr }} accept"
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Allow Kubernetes Pod CIDR destination traffic
+  firewalld:
+    rich_rule: "rule family=ipv4 destination address={{ pod_network_cidr }} accept"
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Allow Kubernetes Pod CIDR source traffic
+  firewalld:
+    rich_rule: "rule family=ipv4 source address={{ pod_network_cidr }} accept"
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Add Calico tunnel interface to trusted zone
+  firewalld:
+    zone: trusted
+    interface: tunl0
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Add kube-ipvs0 interface to trusted zone
+  firewalld:
+    zone: trusted
+    interface: kube-ipvs0
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Enable masquerade
+  firewalld:
+    masquerade: yes
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Reload firewalld to apply all rules
+  command: firewall-cmd --reload
+
+# ════════════════════════════════════════════════════════════════
+# 5. Load kernel modules
+# ════════════════════════════════════════════════════════════════
+- name: Create kernel modules config for Kubernetes
+  copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+
+- name: Load overlay module
+  modprobe:
+    name: overlay
+    state: present
+
+- name: Load br_netfilter module
+  modprobe:
+    name: br_netfilter
+    state: present
+
+# ════════════════════════════════════════════════════════════════
+# 6. Set sysctl parameters
+# ════════════════════════════════════════════════════════════════
+- name: Set sysctl params for Kubernetes networking
+  copy:
+    dest: /etc/sysctl.d/k8s.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+
+- name: Apply sysctl params
+  command: sysctl --system
+
+# ════════════════════════════════════════════════════════════════
+# 7. Install required packages (DNF - Rocky Linux)
+# FIX 6 — DNF not APT
+# ════════════════════════════════════════════════════════════════
+- name: Install required system packages
+  dnf:
+    name:
+      - curl
+      - wget
+      - git
+      - net-tools
+      - iproute-tc
+      - yum-utils
+      - bash-completion
+    state: present
+
+# ════════════════════════════════════════════════════════════════
+# FIX 4 — containerd: fresh config + SystemdCgroup
+# ════════════════════════════════════════════════════════════════
+- name: Add Docker repository (contains containerd)
+  command: >
+    dnf config-manager --add-repo
+    https://download.docker.com/linux/centos/docker-ce.repo
+  args:
+    creates: /etc/yum.repos.d/docker-ce.repo
+
+- name: Install containerd
+  dnf:
+    name: containerd.io
+    state: present
+
+- name: Create containerd config directory
+  file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: Remove old containerd config (force fresh)
+  file:
+    path: /etc/containerd/config.toml
+    state: absent
+
+- name: Generate fresh default containerd config
+  shell: containerd config default > /etc/containerd/config.toml
+
+- name: Enable SystemdCgroup in containerd config
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+
+- name: Restart and enable containerd
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: yes
+
+# FIX 4 — Verify containerd is working before proceeding
+- name: Verify containerd CRI is working
+  command: >
+    crictl --runtime-endpoint
+    unix:///var/run/containerd/containerd.sock version
+  register: containerd_verify
+  retries: 5
+  delay: 5
+  until: containerd_verify.rc == 0
+
+- name: Print containerd version
+  debug:
+    msg: "containerd is working: {{ containerd_verify.stdout_lines }}"
+
+# ════════════════════════════════════════════════════════════════
+# 8. Add Kubernetes repository (RPM - Rocky Linux)
+# ════════════════════════════════════════════════════════════════
+- name: Add Kubernetes yum repository
+  copy:
+    dest: /etc/yum.repos.d/kubernetes.repo
+    content: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key
+      exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+
+# ════════════════════════════════════════════════════════════════
+# 9. Install kubelet, kubeadm, kubectl
+# ════════════════════════════════════════════════════════════════
+- name: Install kubelet, kubeadm, kubectl
+  dnf:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    disable_excludes: kubernetes
+
+- name: Enable and start kubelet
+  systemd:
+    name: kubelet
+    enabled: yes
+    state: started

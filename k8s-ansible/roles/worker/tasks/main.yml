@@ -1,0 +1,52 @@
+---
+# ════════════════════════════════════════════════════════════════
+# FIX 4 — Verify containerd before joining (prevents CRI error)
+# ════════════════════════════════════════════════════════════════
+- name: Verify containerd is working on worker
+  command: >
+    crictl --runtime-endpoint
+    unix:///var/run/containerd/containerd.sock version
+  register: containerd_verify
+  retries: 5
+  delay: 5
+  until: containerd_verify.rc == 0
+
+# ════════════════════════════════════════════════════════════════
+# 1. Check if worker already joined
+# ════════════════════════════════════════════════════════════════
+- name: Check if node is already part of a cluster
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+# ════════════════════════════════════════════════════════════════
+# 2. Read join command from controller
+# ════════════════════════════════════════════════════════════════
+- name: Read join command from controller
+  local_action:
+    module: slurp
+    src: /tmp/k8s_join_command.sh
+  register: join_command_b64
+  when: not kubelet_conf.stat.exists
+
+# ════════════════════════════════════════════════════════════════
+# 3. Join the cluster
+# ════════════════════════════════════════════════════════════════
+- name: Join the Kubernetes cluster
+  command: "{{ join_command_b64.content | b64decode | trim }}"
+  when: not kubelet_conf.stat.exists
+  register: join_result
+
+- name: Print join result
+  debug:
+    var: join_result.stdout_lines
+  when: join_result is defined and join_result.changed
+
+# ════════════════════════════════════════════════════════════════
+# 4. Ensure kubelet is running
+# ════════════════════════════════════════════════════════════════
+- name: Ensure kubelet is running on worker
+  systemd:
+    name: kubelet
+    state: started
+    enabled: yes

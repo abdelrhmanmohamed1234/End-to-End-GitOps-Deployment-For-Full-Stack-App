@@ -1,0 +1,66 @@
+---
+# ════════════════════════════════════════════════════════════════
+# RESET PLAYBOOK — Full cluster teardown
+# Run: ansible-playbook reset.yml
+# ════════════════════════════════════════════════════════════════
+
+- name: Reset Kubernetes cluster on all nodes
+  hosts: k8s_cluster
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Run kubeadm reset
+      command: kubeadm reset -f
+      ignore_errors: yes
+
+    - name: Unmount kubelet volumes
+      shell: |
+        umount $(mount | grep kubelet | awk '{print $3}') 2>/dev/null || true
+
+    - name: Remove Kubernetes data directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/etcd
+        - /var/lib/kubelet
+        - /etc/cni/net.d
+        - /var/lib/cni
+      ignore_errors: yes
+
+    - name: Remove .kube directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/.kube
+        - "/home/{{ ansible_user }}/.kube"
+      ignore_errors: yes
+
+    - name: Flush iptables rules
+      shell: |
+        iptables -F
+        iptables -t nat -F
+        iptables -t mangle -F
+        iptables -X
+      ignore_errors: yes
+
+    - name: Remove join command file
+      local_action:
+        module: file
+        path: /tmp/k8s_join_command.sh
+        state: absent
+      run_once: true
+      ignore_errors: yes
+
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+      ignore_errors: yes
+
+    - name: Reset complete
+      debug:
+        msg: "✅ Cluster reset complete on {{ inventory_hostname }}"
