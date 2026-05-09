@@ -1,13 +1,19 @@
 # backend docker_file
-FROM  node:latest
+FROM node:20-alpine 
 
-WORKDIR /app 
- 
-COPY package.json .
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-RUN npm install
+WORKDIR /app
+
+COPY package*.json ./
+
+
+RUN npm ci --only=production
 
 COPY . .
+
+RUN chown -R appuser:appgroup /app
+USER appuser
 
 EXPOSE 5000
 
