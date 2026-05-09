@@ -28,7 +28,7 @@ jobs:
 
       # --- Backend Build & Scan ---
       - name: Build Backend Image
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest ./MERN_PROJECT_BACKEND
+        run: docker build --no-cache -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest ./MERN_PROJECT_BACKEND
 
       - name: Run Trivy Scan on Backend
         uses: aquasecurity/trivy-action@master
