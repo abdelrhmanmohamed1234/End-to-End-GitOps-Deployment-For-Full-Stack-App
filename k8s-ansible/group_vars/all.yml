@@ -15,11 +15,11 @@ containerd_version: "1.7.*"
 
 # DNS name or IP of the control plane (used by workers to join)
 # Change this to your actual control plane IP
-control_plane_ip: "10.178.240.63"
-control_plane_endpoint: "10.178.240.63:6443"
+control_plane_ip: "172.20.10.6"
+control_plane_endpoint: "172.20.10.6:6443"
 
 # Kubernetes API server advertise address
-apiserver_advertise_address: "10.178.240.63"
+apiserver_advertise_address: "172.20.10.6"
 
 # ArgoCD
 argocd_version: "v2.10.0"
