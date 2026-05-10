@@ -1,0 +1,50 @@
+# ─── Replica Count ────────────────────────────────────────────
+replicaCount: 1
+
+# ─── Image ────────────────────────────────────────────────────
+image:
+  repository: abdelrhmanmohamed1234/mern-frontend  
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# ─── Service ──────────────────────────────────────────────────
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30081
+
+# ─── Environment Variables ────────────────────────────────────
+env:
+  REACT_APP_SERVER_URL: "http://172.20.10.6:5005"   # ← Backend NodePort URL
+
+# ─── Resources ────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+# ─── Liveness & Readiness ─────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 15
+  periodSeconds: 5
+
+# ─── Autoscaling ──────────────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
