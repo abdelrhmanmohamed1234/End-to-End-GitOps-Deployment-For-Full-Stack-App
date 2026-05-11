@@ -54,7 +54,6 @@ spec:
               value: {{ .Values.env.CLOUDINARY_API_KEY | quote }}
             - name: CLOUDINARY_API_SECRET
               value: {{ .Values.env.CLOUDINARY_API_SECRET | quote }}
-          {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.httpGet.path }}
@@ -62,15 +61,12 @@ spec:
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.readinessProbe.enabled }}
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.httpGet.path }}
               port: {{ .Values.readinessProbe.httpGet.port }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-          {{- end }}
           resources:
             requests:
               cpu: {{ .Values.resources.requests.cpu }}

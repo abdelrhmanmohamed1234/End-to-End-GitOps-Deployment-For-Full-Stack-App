@@ -1,31 +1,31 @@
 # ─── Replica Count ────────────────────────────────────────────
-replicaCount: 3
+replicaCount: 1
 
 # ─── Image ────────────────────────────────────────────────────
 image:
-  repository: abdelrhmanmohamed1102002/mern-backend
+  repository: abdelrhmanmohamed1102002/mern-backend   
   tag: "latest"
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 # ─── Service ──────────────────────────────────────────────────
 service:
   type: NodePort
   port: 5000
-  nodePort: 30500
+  nodePort: 30500 
 
 # ─── Environment Variables ────────────────────────────────────
 env:
-  DB_HOST: "mongodb-service"
+  DB_HOST: "mongodb-service"    
   DB_PORT: "27017"
   DB_NAME: "merndb"
   DB_USER: "abdelrhman"
   DB_PASSWORD: "123456"
-  CLOUDINARY_CLOUD_NAME: "duvef6kqj"
+  CLOUDINARY_CLOUD_NAME: "duvef6kqj"     
   CLOUDINARY_API_KEY: "571962183474343"
   CLOUDINARY_API_SECRET: "ormGE32ue1n3gKGulCNwPyVuDas"
 
 # ─── Secrets (recommended for production) ─────────────────────
-useSecret: false
+useSecret: false  
 
 # ─── Resources ────────────────────────────────────────────────
 resources:
@@ -39,16 +39,25 @@ resources:
 # ─── Persistent Volume for uploads ────────────────────────────
 persistence:
   enabled: true
-  storageClass: ""
+  storageClass: ""    
   size: 1Gi
   mountPath: /app/uploads
 
-# ─── Liveness & Readiness (disabled temporarily) ──────────────
+# ─── Liveness & Readiness ─────────────────────────────────────
 livenessProbe:
-  enabled: false
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
 
 readinessProbe:
-  enabled: false
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 15
+  periodSeconds: 5
 
 # ─── MongoDB ──────────────────────────────────────────────────
 mongodb:

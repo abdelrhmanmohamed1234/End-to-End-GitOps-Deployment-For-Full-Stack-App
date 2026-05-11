@@ -1,9 +1,9 @@
 # ─── Replica Count ────────────────────────────────────────────
-replicaCount: 1
+replicaCount: 3
 
 # ─── Image ────────────────────────────────────────────────────
 image:
-  repository: abdelrhmanmohamed1234/mern-frontend  
+  repository: abdelrhmanmohamed1102002/mern-frontend  
   tag: "latest"
   pullPolicy: IfNotPresent
 
