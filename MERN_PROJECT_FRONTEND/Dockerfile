@@ -1,27 +1,34 @@
-# frontend_docker file
-FROM  node:20-alpine AS builder
-
-RUN apk update && apk upgrade
+# Build stage
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json  ./
+# Copy package files
+COPY package*.json ./
 
+# Install dependencies
 RUN npm ci
 
+# Copy source code
 COPY . .
 
+# Build with correct backend URL
+ARG REACT_APP_SERVER_URL
+ENV REACT_APP_SERVER_URL=http://172.20.10.6:30500
 RUN npm run build
 
-# use nginx in front of node
+# Production stage
 FROM nginx:1.25-alpine
 
-RUN apk update && apk upgrade
-
+# Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy static file to my nignx folder for serve static contain
+# Copy build files
 COPY --from=builder /app/build /usr/share/nginx/html
+
+# Add runtime environment injection
+RUN echo 'window._env_ = { REACT_APP_SERVER_URL: "http://172.20.10.6:30500" };' > /usr/share/nginx/html/env.js && \
+    sed -i 's/<head>/<head><script src="\/env.js"><\/script>/' /usr/share/nginx/html/index.html
 
 EXPOSE 80
 
