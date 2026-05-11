@@ -1,15 +1,14 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage with security updates
+FROM node:22-alpine AS builder
+
+RUN apk update && apk upgrade
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 
-# Install dependencies
 RUN npm ci
 
-# Copy source code
 COPY . .
 
 # Build with correct backend URL
@@ -17,8 +16,10 @@ ARG REACT_APP_SERVER_URL
 ENV REACT_APP_SERVER_URL=http://172.20.10.6:30500
 RUN npm run build
 
-# Production stage
-FROM nginx:1.25-alpine
+# Production stage with security updates
+FROM nginx:1.27-alpine
+
+RUN apk update && apk upgrade
 
 # Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
