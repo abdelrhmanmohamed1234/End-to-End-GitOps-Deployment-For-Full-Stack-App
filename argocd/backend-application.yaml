@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mern-backend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/abdelrhmanmohamed1234/End-to-End-GitOps-Deployment-For-Full-Stack-App.git
+    targetRevision: main
+    path: helm-charts/backend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mern-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

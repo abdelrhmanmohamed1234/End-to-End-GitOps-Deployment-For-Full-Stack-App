@@ -15,7 +15,7 @@ service:
 
 # ─── Environment Variables ────────────────────────────────────
 env:
-  REACT_APP_SERVER_URL: "http://172.20.10.6:5005"   # ← Backend NodePort URL
+  REACT_APP_SERVER_URL: "http://172.20.10.4:30500"   # ← Backend NodePort URL
 
 # ─── Resources ────────────────────────────────────────────────
 resources:

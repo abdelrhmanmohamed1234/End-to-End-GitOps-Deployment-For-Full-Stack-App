@@ -1,16 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: mern-stack-root
+  name: mern-frontend
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/abdelrhmanmohamed1234/End-to-End-GitOps-Deployment-For-Full-Stack-App.git'
-    targetRevision: HEAD
-    path: helm-charts/
+    repoURL: https://github.com/abdelrhmanmohamed1234/End-to-End-GitOps-Deployment-For-Full-Stack-App.git
+    targetRevision: main
+    path: helm-charts/frontend
   destination:
-    server: 'https://kubernetes.default.svc'
+    server: https://kubernetes.default.svc
     namespace: mern-app
   syncPolicy:
     automated:
