@@ -27,7 +27,7 @@ services:
     ports:
       - "7070:80"
     environment:
-      - REACT_APP_SERVER_URL=http://172.20.10.6:5005
+      - REACT_APP_SERVER_URL=http://172.20.10.6:30500
     depends_on:
       - backend
     networks:
