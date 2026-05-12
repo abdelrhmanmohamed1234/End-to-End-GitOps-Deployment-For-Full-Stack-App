@@ -39,7 +39,7 @@ resources:
 # ─── Persistent Volume for uploads ────────────────────────────
 persistence:
   enabled: true
-  storageClass: ""
+  storageClass: "local-path"
   size: 1Gi
   mountPath: /app/uploads
 
@@ -63,6 +63,7 @@ mongodb:
     port: 27017
   persistence:
     enabled: true
+    storageClass: "local-path"
     size: 5Gi
 
 # ─── Autoscaling ──────────────────────────────────────────────
