@@ -15,7 +15,7 @@ service:
 
 # ─── Environment Variables ────────────────────────────────────
 env:
-  DB_HOST: "mongodb-service"
+  DB_HOST: "10.109.18.212"
   DB_PORT: "27017"
   DB_NAME: "merndb"
   DB_USER: "abdelrhman"
