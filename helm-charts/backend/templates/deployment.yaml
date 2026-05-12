@@ -54,7 +54,6 @@ spec:
               value: {{ .Values.env.CLOUDINARY_API_KEY | quote }}
             - name: CLOUDINARY_API_SECRET
               value: {{ .Values.env.CLOUDINARY_API_SECRET | quote }}
-          {{- if .Values.livenessProbe.enabled }}
           resources:
             requests:
               cpu: {{ .Values.resources.requests.cpu }}
