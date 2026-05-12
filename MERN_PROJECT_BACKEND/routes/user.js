@@ -8,7 +8,9 @@ router.post("/", upload.single("image"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "Please upload an image" });
     }
-    const result = await cloudinary.uploader.upload(req.file.path);
+    const result = await cloudinary.uploader.upload(req.file.path, {
+  timestamp: Math.floor(Date.now() / 1000)
+});
     let user = new User({
       name: req.body.name,
       avatar: result.secure_url,

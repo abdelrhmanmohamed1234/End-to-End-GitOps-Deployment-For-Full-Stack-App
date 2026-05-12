@@ -6,4 +6,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Wrap the upload function to always include current timestamp
+const originalUpload = cloudinary.uploader.upload;
+
+cloudinary.uploader.upload = function(filePath, options = {}) {
+  // Always add current timestamp to avoid stale request errors
+  options.timestamp = Math.floor(Date.now() / 1000);
+  console.log(`Uploading to Cloudinary with timestamp: ${options.timestamp}`);
+  return originalUpload.call(this, filePath, options);
+};
+
 module.exports = cloudinary;
