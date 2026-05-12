@@ -14,31 +14,38 @@ const {
   DB_NAME,
 } = process.env;
 
-// Use environment variables or defaults
-const host = DB_HOST || 'localhost';
+// Use environment variables
+const host = DB_HOST || 'mongodb-service';
 const port = DB_PORT || '27017';
-const user = DB_USER || '';
-const password = DB_PASSWORD || '';
+const user = DB_USER;
+const password = DB_PASSWORD;
 const database = DB_NAME || 'merndb';
 
-// Build connection string
+// MongoDB connection options
+const mongoOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000,
+  connectTimeoutMS: 30000,
+};
+
+// Build connection string with authSource=admin
 let MONGO_URI;
 if (user && password) {
-  MONGO_URI = `mongodb://${user}:${password}@${host}:${port}/${database}`;
+  MONGO_URI = `mongodb://${user}:${password}@${host}:${port}/${database}?authSource=admin`;
+  console.log('Connecting with authentication to MongoDB');
 } else {
   MONGO_URI = `mongodb://${host}:${port}/${database}`;
+  console.log('Connecting without authentication to MongoDB');
 }
 
 console.log(`Attempting to connect to MongoDB at: ${host}:${port}`);
+console.log(`Database: ${database}`);
 
 // Connect DB
 mongoose
-  .connect(MONGO_URI, { 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000
-  })
-  .then(() => console.log("✅ mongoDB is connected successfully"))
+  .connect(MONGO_URI, mongoOptions)
+  .then(() => console.log("✅ MongoDB is connected successfully"))
   .catch((err) => console.error("❌ MongoDB connection error:", err.message));
 
 // Middleware
@@ -47,5 +54,10 @@ app.use(cors());
 
 // Route
 app.use("/user", require("./routes/user"));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
 
 app.listen(5000, () => console.log("Server is running on port 5000"));
