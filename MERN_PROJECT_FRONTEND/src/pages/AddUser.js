@@ -25,7 +25,10 @@ const AddUser = () => {
       formData.append("image", data.image);
       formData.append("name", data.name);
 
-      const res = await fetch(`${process.env.REACT_APP_SERVER_URL}/user`, {
+	const test = "http://172.20.10.6:30500";
+	    console.log(process.env);
+
+      const res = await fetch(`${test}/user`, {
         method: "POST",
         body: formData,
       });
