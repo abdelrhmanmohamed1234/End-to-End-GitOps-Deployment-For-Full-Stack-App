@@ -5,7 +5,7 @@ replicaCount: 3
 image:
   repository: abdelrhmanmohamed1102002/mern-frontend  
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 # ─── Service ──────────────────────────────────────────────────
 service:
