@@ -43,7 +43,9 @@ mongodb:
   service:
     port: 27017
   persistence:
-    enabled: false
+    enabled: true
+    size: 5Gi
+    storgeClass: local-storge
 
 # ─── Autoscaling ──────────────────────────────────────────────
 autoscaling:

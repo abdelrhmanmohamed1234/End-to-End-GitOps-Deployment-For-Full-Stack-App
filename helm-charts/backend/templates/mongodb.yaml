@@ -24,9 +24,15 @@ spec:
             - containerPort: 27017
           env:
             - name: MONGO_INITDB_ROOT_USERNAME
-              value: {{ .Values.mongodb.auth.rootUsername | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: mern-backend-secret
+                  key: mongo-root-username
             - name: MONGO_INITDB_ROOT_PASSWORD
-              value: {{ .Values.mongodb.auth.rootPassword | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: mern-backend-secret
+                  key: mongo-root-password
           {{- if .Values.mongodb.persistence.enabled }}
           volumeMounts:
             - name: mongodb-data

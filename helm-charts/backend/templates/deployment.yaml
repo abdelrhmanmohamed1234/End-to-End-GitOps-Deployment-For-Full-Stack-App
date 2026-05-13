@@ -29,31 +29,35 @@ spec:
             - name: DB_PORT
               value: {{ .Values.env.DB_PORT | quote }}
             - name: DB_NAME
-              value: {{ .Values.env.DB_NAME | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: mern-backend-secret
+                  key: db-name
             - name: DB_USER
-              {{- if .Values.useSecret }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-backend-secret
+                  name: mern-backend-secret
                   key: db-user
-              {{- else }}
-              value: {{ .Values.env.DB_USER | quote }}
-              {{- end }}
             - name: DB_PASSWORD
-              {{- if .Values.useSecret }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-backend-secret
+                  name: mern-backend-secret
                   key: db-password
-              {{- else }}
-              value: {{ .Values.env.DB_PASSWORD | quote }}
-              {{- end }}
             - name: CLOUDINARY_CLOUD_NAME
-              value: {{ .Values.env.CLOUDINARY_CLOUD_NAME | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: mern-backend-secret
+                  key: cloudinary-cloud-name
             - name: CLOUDINARY_API_KEY
-              value: {{ .Values.env.CLOUDINARY_API_KEY | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: mern-backend-secret
+                  key: cloudinary-api-key
             - name: CLOUDINARY_API_SECRET
-              value: {{ .Values.env.CLOUDINARY_API_SECRET | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: mern-backend-secret
+                  key: cloudinary-api-secret            
           resources:
             requests:
               cpu: {{ .Values.resources.requests.cpu }}
