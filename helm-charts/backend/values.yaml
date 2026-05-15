@@ -26,7 +26,7 @@ persistence:
   enabled: true
   mountPath: /app/uploads
   storageClass: "local-path"
-  size: 1Gi
+  size: 5Gi
 
 resources:
   requests:
