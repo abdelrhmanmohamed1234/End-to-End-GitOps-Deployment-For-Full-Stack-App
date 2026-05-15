@@ -20,9 +20,12 @@ env:
   CLOUDINARY_API_KEY: "571962183474343"
   CLOUDINARY_API_SECRET: "ormGE32ue1n3gKGulCNwPyVuDas"
 
-useSecret: false
+useSecret: true
+
 persistence:
-  enabled: false
+  enabled: true
+  storageClass: "local-path"
+  size: 5Gi
 
 resources:
   requests:
