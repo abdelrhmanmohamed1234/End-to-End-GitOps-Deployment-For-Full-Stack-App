@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: abdelrhmanmohamed1102002/mern-backend
-  tag: "latest"
+  tag: "95511537ad33c622d5c0ed1094f4ca780d953dcc"
   pullPolicy: IfNotPresent
 
 service:
