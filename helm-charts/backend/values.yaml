@@ -13,12 +13,12 @@ service:
 env:
   DB_HOST: "mongodb-service"
   DB_PORT: "27017"
-  DB_NAME: "${{ secrets.DB_NAME }}"
-  DB_USER: "${{ secrets.DB_USER }}"
-  DB_PASSWORD: "${{ secrets.DB_PASSWORD }}"
-  CLOUDINARY_CLOUD_NAME: "${{ secrets.CLOUDINARY_CLOUD_NAME }}"
-  CLOUDINARY_API_KEY: "${{ secrets.CLOUDINARY_API_KEY }}"
-  CLOUDINARY_API_SECRET: "${{ secrets.CLOUDINARY_API_SECRET }}"
+  DB_NAME: "merndb"
+  DB_USER: "abdelrhman"
+  DB_PASSWORD: "123456"
+  CLOUDINARY_CLOUD_NAME: "duvef6kqj"
+  CLOUDINARY_API_KEY: "571962183474343"
+  CLOUDINARY_API_SECRET: "ormGE32ue1n3gKGulCNwPyVuDas"
 
 useSecret: false
 persistence:
