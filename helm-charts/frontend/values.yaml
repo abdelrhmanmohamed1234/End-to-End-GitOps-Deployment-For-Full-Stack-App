@@ -4,7 +4,7 @@ replicaCount: 3
 # ─── Image ────────────────────────────────────────────────────
 image:
   repository: abdelrhmanmohamed1102002/mern-frontend  
-  tag: "latest"
+  tag: "6a06b592d29ca9e9cee1db67803ab01495045466"
   pullPolicy: Always
 
 # ─── Service ──────────────────────────────────────────────────
