@@ -1,5 +1,3 @@
-#GitOps Project WorkFlow
-
 name: CI Pipeline - Build, Scan, Test, and Push
 
 on:
@@ -13,15 +11,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════
-  # Job 1: Backend Testing with Jest & SonarCloud
-  # ═══════════════════════════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
+  # Job 1: Backend Tests + SonarCloud
+  # ═══════════════════════════════════════════════════════════
   backend-tests:
     runs-on: ubuntu-latest
     permissions:
-      contents: read          # Needed to checkout code
-      pull-requests: write    # Needed for SonarCloud to add PR comments
-    
+      contents: read
+      pull-requests: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -39,18 +37,9 @@ jobs:
         working-directory: MERN_PROJECT_BACKEND
         run: npm ci
 
-      - name: Create tests directory
+      - name: Run Jest Tests with Coverage
         working-directory: MERN_PROJECT_BACKEND
-        run: mkdir -p tests
-
-      - name: Run Jest Tests
-        working-directory: MERN_PROJECT_BACKEND
-        run: |
-          if npm run | grep -q "test"; then
-            npm run test:ci || echo "Tests completed with warnings"
-          else
-            echo "No tests configured yet"
-          fi
+        run: npm run test:ci
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
@@ -59,17 +48,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true
 
-  # ═══════════════════════════════════════════════════════════════
-  # Job 2: Frontend Testing with Jest & SonarCloud
-  # ═══════════════════════════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
+  # Job 2: Frontend Tests + SonarCloud
+  # ═══════════════════════════════════════════════════════════
   frontend-tests:
     runs-on: ubuntu-latest
     permissions:
-      contents: read          # Needed to checkout code
-      pull-requests: write    # Needed for SonarCloud to add PR comments
-    
+      contents: read
+      pull-requests: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -89,12 +77,7 @@ jobs:
 
       - name: Run Jest Tests with Coverage
         working-directory: MERN_PROJECT_FRONTEND
-        run: |
-          if npm run | grep -q "test"; then
-            npm test -- --coverage --watchAll=false --ci --passWithNoTests
-          else
-            echo "No tests configured yet"
-          fi
+        run: npm run test:ci
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
@@ -103,17 +86,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true
 
-  # ═══════════════════════════════════════════════════════════════
-  # Job 3: Build, Scan, and Push to Docker Hub
-  # ═══════════════════════════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
+  # Job 3: Build, Scan, and Push
+  # ═══════════════════════════════════════════════════════════
   build-and-push:
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
-    if: success()
     permissions:
-      contents: read          # Needed to checkout code
+      contents: write
 
     steps:
       - name: Checkout Code
@@ -130,9 +111,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- Backend Build, Scan & Push ---
+      # ── Backend ──────────────────────────────────────────
       - name: Build Backend Image
-        run: docker build --no-cache -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest ./MERN_PROJECT_BACKEND
+        run: |
+          docker build --no-cache \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:${{ github.sha }} \
+            ./MERN_PROJECT_BACKEND
 
       - name: Scan Backend with Trivy
         uses: aquasecurity/trivy-action@master
@@ -140,18 +125,21 @@ jobs:
           image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest'
           format: 'table'
           exit-code: '1'
+          ignore-unfixed: true
           severity: 'CRITICAL'
 
       - name: Push Backend Image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:${{ github.sha }}
 
-      # --- Frontend Build, Scan & Push ---
+      # ── Frontend ─────────────────────────────────────────
+      # FIX: No hardcoded URL — injected at runtime by nginx
       - name: Build Frontend Image
         run: |
-          docker build \
-            --no-cache \
-            --build-arg REACT_APP_SERVER_URL=http://172.20.10.6:30500 \
+          docker build --no-cache \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:latest \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:${{ github.sha }} \
             ./MERN_PROJECT_FRONTEND
 
       - name: Scan Frontend with Trivy
@@ -160,10 +148,29 @@ jobs:
           image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:latest'
           format: 'table'
           exit-code: '1'
+          ignore-unfixed: true
           severity: 'CRITICAL'
 
       - name: Push Frontend Image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:latest
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:${{ github.sha }}
+
+      # ── Update Helm Tags ──────────────────────────────────
+      - name: Update Helm image tags with git SHA
+        run: |
+          sed -i "s|tag: \"latest\"|tag: \"${{ github.sha }}\"|g" \
+            helm-charts/backend/values.yaml \
+            helm-charts/frontend/values.yaml
+
+      - name: Commit updated Helm values
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm-charts/backend/values.yaml helm-charts/frontend/values.yaml
+          git diff --staged --quiet || \
+            git commit -m "ci: update image tags to ${{ github.sha }} [skip ci]"
+          git push
 
       - name: Build Complete
-        run: echo "✅ All images built, scanned, and pushed successfully!"
+        run: echo "All images built, scanned, and pushed successfully!"

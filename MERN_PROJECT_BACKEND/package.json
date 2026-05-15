@@ -6,8 +6,16 @@
   "scripts": {
     "start": "node index",
     "server": "nodemon index",
-    "test": "echo \"No tests configured yet\" && exit 0",
-    "test:ci": "echo \"No tests configured yet\" && exit 0"
+    "test": "jest --coverage --forceExit",
+    "test:ci": "jest --coverage --forceExit --ci"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "routes/**/*.js",
+      "model/**/*.js"
+    ]
   },
   "keywords": [],
   "author": "",
@@ -30,6 +38,8 @@
     "npm": ">=9.8.1"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4",
     "nodemon": "^3.1.14"
   }
 }
