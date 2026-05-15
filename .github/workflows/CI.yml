@@ -1,3 +1,5 @@
+#GitOps Project WorkFlow
+
 name: CI Pipeline - Build, Scan, Test, and Push
 
 on:
