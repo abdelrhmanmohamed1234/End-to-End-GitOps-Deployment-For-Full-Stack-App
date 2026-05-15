@@ -1,0 +1,240 @@
+---
+# ═══════════════════════════════════════════════════════════════
+# Playbook: Time Synchronization & Port Configuration for Rocky Linux
+# OS: Rocky Linux 8/9
+# ═══════════════════════════════════════════════════════════════
+
+- name: Configure time synchronization on Rocky Linux nodes
+  hosts: k8s_cluster
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    # ═══════════════════════════════════════════════════════════
+    # 1. Install chrony (default NTP for Rocky Linux)
+    # ═══════════════════════════════════════════════════════════
+    - name: Install chrony (Rocky Linux default NTP)
+      dnf:
+        name: chrony
+        state: present
+        update_cache: yes
+    
+    - name: Ensure chrony is enabled and running
+      systemd:
+        name: chronyd
+        enabled: yes
+        state: started
+    
+    # ═══════════════════════════════════════════════════════════
+    # 2. Configure NTP servers for Rocky Linux
+    # ═══════════════════════════════════════════════════════════
+    - name: Backup original chrony.conf
+      copy:
+        src: /etc/chrony.conf
+        dest: /etc/chrony.conf.backup
+        remote_src: yes
+        backup: yes
+    
+    - name: Configure NTP servers in chrony.conf
+      blockinfile:
+        path: /etc/chrony.conf
+        block: |
+          # Use public NTP servers
+          pool 0.pool.ntp.org iburst
+          pool 1.pool.ntp.org iburst
+          pool 2.pool.ntp.org iburst
+          pool 3.pool.ntp.org iburst
+          
+          # Record the rate at which the system clock gains/losses time
+          driftfile /var/lib/chrony/drift
+          
+          # Allow the system clock to be stepped in the first three updates
+          makestep 1.0 3
+          
+          # Enable kernel synchronization of the real-time clock (RTC)
+          rtcsync
+          
+          # Specify file containing keys for NTP authentication
+          keyfile /etc/chrony.keys
+          
+          # Specify directory for log files
+          logdir /var/log/chrony
+        marker: "# {mark} ANSIBLE MANAGED NTP CONFIGURATION"
+    
+    - name: Restart chrony to apply new configuration
+      systemd:
+        name: chronyd
+        state: restarted
+    
+    # ═══════════════════════════════════════════════════════════
+    # 3. Force time synchronization
+    # ═══════════════════════════════════════════════════════════
+    - name: Force immediate time sync
+      command: chronyc -a makestep
+      register: time_sync
+      failed_when: false
+    
+    - name: Wait for time synchronization
+      pause:
+        seconds: 5
+    
+    - name: Check if time is synchronized
+      command: chronyc tracking
+      register: chrony_tracking
+    
+    - name: Show chrony status
+      debug:
+        msg: "{{ chrony_tracking.stdout_lines }}"
+    
+    # ═══════════════════════════════════════════════════════════
+    # 4. Set timezone (Rocky Linux default to UTC)
+    # ═══════════════════════════════════════════════════════════
+    - name: Set timezone to UTC for Kubernetes compatibility
+      command: timedatectl set-timezone UTC
+      register: timezone_set
+    
+    - name: Verify timezone
+      command: timedatectl show --property=Timezone --value
+      register: tz
+    
+    - name: Show current timezone
+      debug:
+        msg: "Timezone set to: {{ tz.stdout }}"
+    
+    # ═══════════════════════════════════════════════════════════
+    # 5. Display current time on each node
+    # ═══════════════════════════════════════════════════════════
+    - name: Get current date and time
+      command: date "+%Y-%m-%d %H:%M:%S %Z"
+      register: current_time
+    
+    - name: Show current time on node
+      debug:
+        msg: "✅ {{ inventory_hostname }} - Time: {{ current_time.stdout }}"
+    
+    # ═══════════════════════════════════════════════════════════
+    # 6. Sync hardware clock (RTC)
+    # ═══════════════════════════════════════════════════════════
+    - name: Sync system clock to hardware clock
+      command: hwclock --systohc
+      when: ansible_os_family == "RedHat"
+    
+    # ═══════════════════════════════════════════════════════════
+    # 7. Configure firewalld for Rocky Linux
+    # ═══════════════════════════════════════════════════════════
+    - name: Ensure firewalld is installed
+      dnf:
+        name: firewalld
+        state: present
+    
+    - name: Start and enable firewalld
+      systemd:
+        name: firewalld
+        enabled: yes
+        state: started
+    
+    - name: Open required application ports
+      firewalld:
+        port: "{{ item }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - 30080   # ArgoCD HTTP
+        - 30443   # ArgoCD HTTPS
+        - 30500   # Backend API
+        - 30081   # Frontend
+        - 6443    # Kubernetes API
+        - 10250   # Kubelet
+        - 10257   # Kube-controller-manager
+        - 10259   # Kube-scheduler
+        - 179     # Calico BGP
+        - 4789    # Calico VXLAN
+    
+    - name: Open NodePort range for Kubernetes
+      command: firewall-cmd --permanent --add-port=30000-32767/tcp
+      ignore_errors: yes
+    
+    - name: Reload firewalld
+      command: firewall-cmd --reload
+      register: firewall_reload
+    
+    - name: Verify open ports
+      command: firewall-cmd --list-ports
+      register: open_ports
+      
+    - name: Show open ports
+      debug:
+        msg: "{{ inventory_hostname }} open ports: {{ open_ports.stdout }}"
+
+# ═══════════════════════════════════════════════════════════════
+# Restart Kubernetes pods after time sync
+# ═══════════════════════════════════════════════════════════════
+- name: Restart application pods to pick up new time
+  hosts: control_plane
+  become: yes
+  gather_facts: no
+  
+  tasks:
+    - name: Check if mern-app namespace exists
+      command: kubectl get namespace mern-app
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: namespace_check
+      ignore_errors: yes
+      failed_when: false
+    
+    - name: Restart backend pods
+      command: kubectl rollout restart deployment -n mern-app mern-backend-backend
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: namespace_check.rc == 0
+      ignore_errors: yes
+    
+    - name: Restart frontend pods
+      command: kubectl rollout restart deployment -n mern-app mern-frontend-frontend
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: namespace_check.rc == 0
+      ignore_errors: yes
+    
+    - name: Wait for pods to be ready
+      pause:
+        seconds: 45
+    
+    - name: Get pod status
+      command: kubectl get pods -n mern-app
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: pod_status
+      when: namespace_check.rc == 0
+      
+    - name: Display pod status
+      debug:
+        var: pod_status.stdout_lines
+      when: namespace_check.rc == 0
+
+# ═══════════════════════════════════════════════════════════════
+# Verification
+# ═══════════════════════════════════════════════════════════════
+- name: Verify all nodes have consistent time
+  hosts: k8s_cluster
+  become: no
+  gather_facts: no
+  
+  tasks:
+    - name: Get current time from all nodes
+      command: date "+%H:%M:%S"
+      register: node_time
+      
+    - name: Display all node times
+      debug:
+        msg: "{{ inventory_hostname }}: {{ node_time.stdout }}"
+    
+    - name: Check NTP synchronization status
+      command: timedatectl show --property=NTPSynchronized --value
+      register: ntp_sync
+      
+    - name: Show sync status
+      debug:
+        msg: "{{ inventory_hostname }} NTP sync: {{ '✅ YES' if ntp_sync.stdout == 'yes' else '❌ NO' }}"
