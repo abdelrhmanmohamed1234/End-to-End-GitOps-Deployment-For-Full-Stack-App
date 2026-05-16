@@ -6,6 +6,9 @@ on:
     paths-ignore:
       - 'README.md'
       - 'k8s-ansible/**'
+      - 'project screenshots/**'
+      - 'docker-compose.yml'
+      - '.env.example'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
