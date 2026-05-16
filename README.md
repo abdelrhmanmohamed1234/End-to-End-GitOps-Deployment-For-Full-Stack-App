@@ -56,52 +56,52 @@ The result is a **fully automated, auditable, and reproducible** deployment pipe
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Developer Workstation                         │
+│                        Developer Workstation                        │
 │                    git push → GitHub (main branch)                  │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    GitHub Actions CI Pipeline                        │
-│                                                                      │
+│                    GitHub Actions CI Pipeline                       │
+│                                                                     │
 │  Job 1: backend-tests          Job 2: frontend-tests                │
 │  ├── npm ci                    ├── npm ci                           │
 │  ├── Jest + Coverage           ├── Jest + Coverage                  │
 │  └── SonarCloud Scan           └── SonarCloud Scan                  │
-│                                                                      │
+│                                                                     │
 │  Job 3: build-and-push  (needs: both test jobs)                     │
-│  ├── Hadolint (Dockerfile lint)                                      │
-│  ├── Docker Build (Backend + Frontend)                               │
-│  ├── Trivy Scan (block on CRITICAL CVEs)                             │
+│  ├── Hadolint (Dockerfile lint)                                     │
+│  ├── Docker Build (Backend + Frontend)                              │
+│  ├── Trivy Scan (block on CRITICAL CVEs)                            │
 │  ├── Docker Push → Docker Hub (:latest + :$SHA)                     │
 │  └── Update Helm values.yaml → git commit [skip ci]                 │
 └────────────────────────────┬────────────────────────────────────────┘
                              │  Helm chart updated in Git
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     ArgoCD (GitOps Controller)                       │
-│                                                                      │
-│  Polls Git repo every ~3 minutes                                     │
+│                     ArgoCD (GitOps Controller)                      │
+│                                                                     │
+│  Polls Git repo every ~3 minutes                                    │
 │  Detects image tag change in helm-charts/                           │
-│  Runs: helm upgrade --install                                        │
-│  Self-heals any manual cluster drift                                 │
-│  Prunes resources removed from chart                                 │
+│  Runs: helm upgrade --install                                       │
+│  Self-heals any manual cluster drift                                │
+│  Prunes resources removed from chart                                │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│              Kubernetes Cluster (kubeadm + Calico CNI)               │
-│                                                                      │
-│  Namespace: mern-app                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
-│  │  Frontend    │  │   Backend    │  │   MongoDB    │             │
-│  │  Pod ×3      │  │   Pod ×1     │  │   Pod ×1     │             │
-│  │  (React+Nginx│  │  (Express)   │  │  (Stateful)  │             │
-│  │  NodePort    │  │  NodePort    │  │  ClusterIP   │             │
-│  │  :30081)     │  │  :30500)     │  │  :27017)     │             │
-│  └──────────────┘  └──────────────┘  └──────────────┘             │
-│                                              │                       │
-│                                    PersistentVolumeClaim             │
+│              Kubernetes Cluster (kubeadm + Calico CNI)              │
+│                                                                     │
+│  Namespace: mern-app                                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │  Frontend    │  │   Backend    │  │   MongoDB    │               │
+│  │  Pod ×3      │  │   Pod ×1     │  │   Pod ×1     │               │
+│  │  (React+Nginx│  │  (Express)   │  │  (Stateful)  │               │
+│  │  NodePort    │  │  NodePort    │  │  ClusterIP   │               │
+│  │  :30081)     │  │  :30500)     │  │  :27017)     │               │
+│  └──────────────┘  └──────────────┘  └──────────────┘               │
+│                                              │                      │
+│                                    PersistentVolumeClaim            │
 │                                    (local-path, 5Gi)                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -111,8 +111,8 @@ The result is a **fully automated, auditable, and reproducible** deployment pipe
 | Node | IP | Role |
 |------|----|------|
 | master | 172.20.10.6 | Control Plane + Ansible Controller |
-| worker-01 | 192.168.1.90 | Worker Node |
-| worker-02 | 192.168.1.2 | Worker Node |
+| worker-01 | 172.20.10.5 | Worker Node |
+| worker-02 | 172.20.10.4 | Worker Node |
 
 ---
 
